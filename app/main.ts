@@ -11,6 +11,7 @@ const server = net.createServer((socket) => {
 
 
 });
+
 server.on("connection",(socket)=>{
     socket.on("data", (data) => {
         const rawHttpReqString= data.toString();
@@ -18,7 +19,11 @@ server.on("connection",(socket)=>{
         const httpReqLine = httpReqString[0].split(" ");
         const httpPath=httpReqLine[1].split('/').filter((item) => item !== "");
 
-        if(httpPath[0]==='echo'){
+        if(httpPath.length===0){
+            socket.write("HTTP/1.1 200 OK\r\n\r\n");
+        }
+
+       else if(httpPath[0]==='echo'){
             socket.write(`HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${httpPath[1].length}\r\n\r\n${httpPath[1]}`);
             
         }else{
