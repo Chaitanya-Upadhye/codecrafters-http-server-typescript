@@ -16,9 +16,10 @@ server.on("connection",(socket)=>{
         const rawHttpReqString= data.toString();
         const httpReqString = rawHttpReqString.split("\r\n");
         const httpReqLine = httpReqString[0].split(" ");
+        const httpPath=httpReqLine[1].split('/').filter((item) => item !== "");
 
-        if(httpReqLine[1]==="/"){
-            socket.write("HTTP/1.1 200 OK\r\n\r\n")
+        if(httpPath[0]==='echo'){
+            socket.write(`HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${httpPath[1].length}\r\n\r\n${httpPath[1]}`);
             
         }else{
             socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
