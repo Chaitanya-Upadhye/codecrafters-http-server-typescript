@@ -79,7 +79,7 @@ httpHandler.register('/user-agent', UserAgentEchoRequestHandler);
 httpHandler.register('/file/:filename', fileHandler);
 async function fileHandler(rawHttpReqString: string,params:any) {
 const dir=Bun.argv[3];
-
+console.log({dir});
 const file = Bun.file(`${import.meta.dirname}${dir}${params.filename}`);
 
 const exists=await file.exists(); // boolean;
