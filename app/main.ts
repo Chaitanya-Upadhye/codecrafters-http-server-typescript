@@ -76,6 +76,22 @@ httpHandler.register('/', GetIndexRequestHandler)
 httpHandler.register('/echo/:message', EchoRequestHandler);
 httpHandler.register('/echo/:message', EchoRequestHandler);
 httpHandler.register('/user-agent', UserAgentEchoRequestHandler);
+httpHandler.register('/file/:filename', fileHandler);
+async function fileHandler(rawHttpReqString: string,params:any) {
+const dir=Bun.argv[3];
+
+const file = Bun.file(`${import.meta.dirname}${dir}${params.filename}.txt`);
+
+const exists=await file.exists(); // boolean;
+if (!exists) {
+    return "HTTP/1.1 404 Not Found\r\n\r\n";
+}
+const fileContent = await file.text(); // string;
+const fileSize = file.size; // number;
+
+return `HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: ${fileSize}\r\n\r\n${fileContent}`;
+
+}
 
 async function GetIndexRequestHandler(rawHttpReqString: string,params:any) {
     const httpReqString = rawHttpReqString.split("\r\n");
