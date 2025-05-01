@@ -80,7 +80,7 @@ httpHandler.register('/file/:filename', fileHandler);
 async function fileHandler(rawHttpReqString: string,params:any) {
 const dir=Bun.argv[3];
 
-const file = Bun.file(`${import.meta.dirname}${dir}${params.filename}.txt`);
+const file = Bun.file(`${import.meta.dirname}${dir}${params.filename}`);
 
 const exists=await file.exists(); // boolean;
 if (!exists) {
