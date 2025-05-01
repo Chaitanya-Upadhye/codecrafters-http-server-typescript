@@ -79,13 +79,14 @@ httpHandler.register('/user-agent', UserAgentEchoRequestHandler);
 httpHandler.register('/files/:filename', fileHandler);
 async function fileHandler(rawHttpReqString: string,params:any) {
 const dir=Bun.argv[3];
-console.log({dir});
 const file = Bun.file(`${import.meta.dirname}${dir}${params.filename}.txt`);
 
 const exists=await file.exists(); // boolean;
 if (!exists) {
     return "HTTP/1.1 404 Not Found\r\n\r\n";
 }
+console.log({dir,exists,params});
+
 const fileContent = await file.text(); // string;
 const fileSize = file.size; // number;
 
