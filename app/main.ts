@@ -76,7 +76,7 @@ httpHandler.register('/', GetIndexRequestHandler)
 httpHandler.register('/echo/:message', EchoRequestHandler);
 httpHandler.register('/echo/:message', EchoRequestHandler);
 httpHandler.register('/user-agent', UserAgentEchoRequestHandler);
-httpHandler.register('/file/:filename', fileHandler);
+httpHandler.register('/files/:filename', fileHandler);
 async function fileHandler(rawHttpReqString: string,params:any) {
 const dir=Bun.argv[3];
 console.log({dir});
