@@ -38,18 +38,31 @@ function getRequestHeaders(rawHttpReqString: string) {
 //**************** HTTP handler **************** */
 class HttpHandler {
     handlers = new Map();
+    postHandlers= new Map();
     register(endpoint = '', handler: any) {
         const {regexp,keys}=pathToRegexp(endpoint);
 
         this.handlers.set(endpoint, {handler,regexp,keys});
     }
+    registerPost(endpoint = '', handler: any) {
+        const {regexp,keys}=pathToRegexp(endpoint);
+
+        this.postHandlers.set(endpoint, {handler,regexp,keys});
+    }
+
     async handleRequest(data: Buffer<ArrayBufferLike>) {
        
         const rawHttpReqString = data.toString();
         const httpReqString = rawHttpReqString.split("\r\n");
         const headers = getRequestHeaders(rawHttpReqString);
+        const requestBodyRaw = httpReqString[httpReqString.length - 1];
+        const contentLength = headers['Content-Length'] ? parseInt(headers['Content-Length']) : 0;
+        let body = '';
+        if (contentLength > 0) {body = requestBodyRaw.slice(0, contentLength);}
         const httpReqLine = httpReqString[0].split(" ");
-        for (const [route,{regexp,handler,keys}] of this.handlers.entries()) {
+        const httpMethod = httpReqLine[0];
+        const handlers = httpMethod === 'POST' ? this.postHandlers : this.handlers;
+        for (const [route,{regexp,handler,keys}] of handlers.entries()) {
             if(regexp.test(httpReqLine[1]))
             {
                 const match = regexp.exec(httpReqLine[1]);
@@ -59,7 +72,7 @@ class HttpHandler {
                         params[keys[i].name] = match[i + 1];
                     }
                 }
-                return await handler(rawHttpReqString,params,headers);
+                return await handler(rawHttpReqString,params,headers,requestBodyRaw);
             }
         }
        
@@ -77,6 +90,15 @@ httpHandler.register('/echo/:message', EchoRequestHandler);
 httpHandler.register('/echo/:message', EchoRequestHandler);
 httpHandler.register('/user-agent', UserAgentEchoRequestHandler);
 httpHandler.register('/files/:filename', fileHandler);
+httpHandler.registerPost('/files/:filename', fileHandlerPost);
+
+
+async function fileHandlerPost(rawHttpReqString: string,params:any,headers:any,body:string) {
+    const dir=Bun.argv[3];
+    await Bun.write(`${dir}${params.filename}`, body);
+    return `HTTP/1.1 201 Created\r\n\r\n`
+    
+}
 async function fileHandler(rawHttpReqString: string,params:any) {
 const dir=Bun.argv[3];
 const file = Bun.file(`${dir}${params.filename}`);
