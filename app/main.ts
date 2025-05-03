@@ -104,7 +104,10 @@ class HttpHandler {
                     resp.body = Bun.gzipSync(resp.body);
                     resp.headers['Content-Length'] = resp.body.length;
                 }
-                
+                if(headers['Connection'] && headers['Connection'].includes('close'))
+                {   
+                    resp.headers['Connection'] = 'close';
+                }
 
                  return Buffer.concat([Buffer.from(serializeResponse(resp),'utf-8'), Buffer.from(resp.body)]); ;
                
@@ -240,7 +243,11 @@ async function onConnection(socket: net.Socket) {
         }
         const resp= await httpHandler.handleRequest(data);
 
-        await socketWrite(tcpConnWrapper, resp);
+        await socketWrite(tcpConnWrapper,resp);
+        const headers= getRequestHeaders(data.toString());
+        if (headers['Connection'] && headers['Connection'].includes('close')) {
+            break;
+        }
 
 
     }
