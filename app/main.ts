@@ -28,7 +28,7 @@ server.listen(4221, "localhost");
 function getRequestHeaders(rawHttpReqString: string) {
     const httpReqString = rawHttpReqString.split("\r\n");
     const headersString = httpReqString.slice(1, httpReqString.length - 2);
-    const headers={};
+    const headers:any={};
     for (const header of headersString) {
         const [key, value] = header.split(": ");
         headers[key] = value;
@@ -80,9 +80,9 @@ class HttpHandler {
             body:''
         };
 
-        for (const [route,{regexp,handler,keys}] of handlers.entries()) {
-            if(regexp.test(httpReqLine[1]))
-            {
+        for (const [_route,{regexp,handler,keys}] of handlers.entries()) {
+            if(!regexp.test(httpReqLine[1])) continue;
+            
                 const match = regexp.exec(httpReqLine[1]);
                 const params:any = {};
                 if (match) {
@@ -91,10 +91,7 @@ class HttpHandler {
                     }
                 }
                 const resp= await handler(rawHttpReqString,params,headers,body,response);
-                if(typeof resp === 'string')
-                {
-                    return resp;
-                }
+                
                if(resp.body.length){ resp.headers['Content-Type'] = resp.headers['Content-Type'] || 'text/plain';
                 resp.headers['Content-Length'] = resp.body.length;}
         
@@ -111,7 +108,7 @@ class HttpHandler {
 
                  return Buffer.concat([Buffer.from(serializeResponse(resp),'utf-8'), Buffer.from(resp.body)]); ;
                
-            }
+            
         }
        
         return Buffer.from("HTTP/1.1 404 Not Found\r\n\r\n");
@@ -136,7 +133,6 @@ async function fileHandlerPost(rawHttpReqString: string,params:any,headers:any,b
     response.status=201;
     response.reasonPhrase='Created';
     return response;
-    return `HTTP/1.1 201 Created\r\n\r\n`
     
 }
 async function fileHandler(rawHttpReqString: string,params:any,headers:any,body:any,response:any) {
@@ -149,7 +145,6 @@ if (!exists) {
     response.status=404;
     response.reasonPhrase='Not Found';
     return response;
-    return "HTTP/1.1 404 Not Found\r\n\r\n";
 }
 
 const fileContent = await file.text(); // string;
@@ -159,7 +154,6 @@ response.body = fileContent;
 response.headers['Content-Type'] = 'application/octet-stream';
 response.headers['Content-Length'] = fileSize;
 return response;
-return `HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: ${fileSize}\r\n\r\n${fileContent}`;
 
 }
 
@@ -184,14 +178,13 @@ async function EchoRequestHandler(rawHttpReqString: string,params:any,headers:an
 async function UserAgentEchoRequestHandler(rawHttpReqString: string,params:any,headers:any,requestBodyRaw:string,response:any) {
     response.body = headers['User-Agent'];
     return response;
-    return `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${headers['User-Agent'].length}\r\n\r\n${headers['User-Agent']}`;
 }
 
 
 
 //**************** Socket handlers *****************/
 
-async function socketRead(tcpConnWrapper: { socket: net.Socket, reader: any, ended?: boolean }) {
+async function socketRead(tcpConnWrapper: { socket: net.Socket, reader: any, ended?: boolean }): Promise<Buffer<ArrayBufferLike>> {
     return new Promise((resolve, reject) => {
         if (tcpConnWrapper.ended) {
             resolve(Buffer.from(''));
@@ -217,8 +210,13 @@ async function socketWrite(tcpConnWrapper: { socket: net.Socket, reader: any, en
 
     });
 }
+type TcpConnWrapper = {
+    socket: net.Socket;
+    reader: null | { resolve: (data: Buffer<ArrayBufferLike>) => void, reject: (err: Error) => void };
+    ended?: boolean;
+}
 async function onConnection(socket: net.Socket) {
-    const tcpConnWrapper = {
+    const tcpConnWrapper:TcpConnWrapper = {
         socket,
         reader: null,
         ended: false
@@ -237,7 +235,7 @@ async function onConnection(socket: net.Socket) {
     })
 
     while (true) {
-        const data = await socketRead(tcpConnWrapper)
+        const data:Buffer = await socketRead(tcpConnWrapper)
         if (data.length === 0) {
             break;
         }
