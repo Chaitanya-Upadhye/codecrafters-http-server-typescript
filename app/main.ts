@@ -42,8 +42,7 @@ function serializeResponse(response:{status:number,reasonPhrase:string,httpVersi
     for (const [key,value] of Object.entries(headers)) {
         responseString += `${key}: ${value}\r\n`;
     }
-    responseString += `\r\n${body}`;
-    return responseString;
+    return `${responseString}\r\n`;
 }
 
 //**************** HTTP handler **************** */
@@ -102,17 +101,17 @@ class HttpHandler {
                 if(headers['Accept-Encoding'] && headers['Accept-Encoding'].includes('gzip'))
                 {
                     resp.headers['Content-Encoding'] = 'gzip';
-                    // resp.body = Bun.gzipSync(resp.body).toString();
-                    // resp.headers['Content-Length'] = resp.body.length;
+                    resp.body = Bun.gzipSync(resp.body);
+                    resp.headers['Content-Length'] = resp.body.length;
                 }
                 
 
-                 return serializeResponse(resp);
+                 return Buffer.concat([Buffer.from(serializeResponse(resp),'utf-8'), Buffer.from(resp.body)]); ;
                
             }
         }
        
-        return "HTTP/1.1 404 Not Found\r\n\r\n";
+        return Buffer.from("HTTP/1.1 404 Not Found\r\n\r\n");
      }
 
 
@@ -241,7 +240,7 @@ async function onConnection(socket: net.Socket) {
         }
         const resp= await httpHandler.handleRequest(data);
 
-        await socketWrite(tcpConnWrapper, Buffer.from(resp));
+        await socketWrite(tcpConnWrapper, resp);
 
 
     }
