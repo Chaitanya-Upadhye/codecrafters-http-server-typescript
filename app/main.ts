@@ -35,6 +35,17 @@ function getRequestHeaders(rawHttpReqString: string) {
     }
     return headers
 }
+
+function serializeResponse(response:{status:number,reasonPhrase:string,httpVersion:string,headers:{},body:string}) {
+    const {status,reasonPhrase,httpVersion,headers,body}=response;
+    let responseString = `${httpVersion} ${status} ${reasonPhrase}\r\n`;
+    for (const [key,value] of Object.entries(headers)) {
+        responseString += `${key}: ${value}\r\n`;
+    }
+    responseString += `\r\n${body}`;
+    return responseString;
+}
+
 //**************** HTTP handler **************** */
 class HttpHandler {
     handlers = new Map();
@@ -62,6 +73,14 @@ class HttpHandler {
         const httpReqLine = httpReqString[0].split(" ");
         const httpMethod = httpReqLine[0];
         const handlers = httpMethod === 'POST' ? this.postHandlers : this.handlers;
+        const response={
+            status:200,
+            reasonPhrase:'OK',
+            httpVersion:'HTTP/1.1',
+            headers:{},
+            body:''
+        };
+
         for (const [route,{regexp,handler,keys}] of handlers.entries()) {
             if(regexp.test(httpReqLine[1]))
             {
@@ -72,7 +91,24 @@ class HttpHandler {
                         params[keys[i].name] = match[i + 1];
                     }
                 }
-                return await handler(rawHttpReqString,params,headers,requestBodyRaw);
+                const resp= await handler(rawHttpReqString,params,headers,body,response);
+                if(typeof resp === 'string')
+                {
+                    return resp;
+                }
+               if(resp.body.length){ resp.headers['Content-Type'] = resp.headers['Content-Type'] || 'text/plain';
+                resp.headers['Content-Length'] = resp.body.length;}
+        
+                if(headers['Accept-Encoding'] && headers['Accept-Encoding'].includes('gzip'))
+                {
+                    resp.headers['Content-Encoding'] = 'gzip';
+                    // resp.body = Bun.gzipSync(resp.body).toString();
+                    // resp.headers['Content-Length'] = resp.body.length;
+                }
+                
+
+                 return serializeResponse(resp);
+               
             }
         }
        
@@ -87,58 +123,65 @@ class HttpHandler {
 const httpHandler = new HttpHandler();
 httpHandler.register('/', GetIndexRequestHandler)
 httpHandler.register('/echo/:message', EchoRequestHandler);
-httpHandler.register('/echo/:message', EchoRequestHandler);
 httpHandler.register('/user-agent', UserAgentEchoRequestHandler);
 httpHandler.register('/files/:filename', fileHandler);
 httpHandler.registerPost('/files/:filename', fileHandlerPost);
 
 
-async function fileHandlerPost(rawHttpReqString: string,params:any,headers:any,body:string) {
+async function fileHandlerPost(rawHttpReqString: string,params:any,headers:any,body:string,response:any) {
     const dir=Bun.argv[3];
     await Bun.write(`${dir}${params.filename}`, body);
+    response.status=201;
+    response.reasonPhrase='Created';
+    return response;
     return `HTTP/1.1 201 Created\r\n\r\n`
     
 }
-async function fileHandler(rawHttpReqString: string,params:any) {
+async function fileHandler(rawHttpReqString: string,params:any,headers:any,body:any,response:any) {
 const dir=Bun.argv[3];
 const file = Bun.file(`${dir}${params.filename}`);
 
 const exists=await file.exists(); // boolean;
 
 if (!exists) {
+    response.status=404;
+    response.reasonPhrase='Not Found';
+    return response;
     return "HTTP/1.1 404 Not Found\r\n\r\n";
 }
 
 const fileContent = await file.text(); // string;
 const fileSize = file.size; // number;
 
+response.body = fileContent;
+response.headers['Content-Type'] = 'application/octet-stream';
+response.headers['Content-Length'] = fileSize;
+return response;
 return `HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: ${fileSize}\r\n\r\n${fileContent}`;
 
 }
 
-async function GetIndexRequestHandler(rawHttpReqString: string,params:any) {
-    const httpReqString = rawHttpReqString.split("\r\n");
-    const httpReqLine = httpReqString[0].split(" ");
-    const httpPath = httpReqLine[1].split('/').filter((item) => item !== "");
-
-    if (httpPath.length === 0) {
-        return "HTTP/1.1 200 OK\r\n\r\n";
-    }
-    return "HTTP/1.1 200 OK\r\n\r\n";
+async function GetIndexRequestHandler(rawHttpReqString: string,params:any,headers:any,requestBodyRaw:string,response:any) {
+response.body = '';
+return response;    
 
 
 }
-async function EchoRequestHandler(rawHttpReqString: string) {
+async function EchoRequestHandler(rawHttpReqString: string,params:any,headers:any,requestBodyRaw:string,response:any) {
     const httpReqString = rawHttpReqString.split("\r\n");
     const httpReqLine = httpReqString[0].split(" ");
     const httpPath = httpReqLine[1].split('/').filter((item) => item !== "");
-
-     return `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${httpPath[1].length}\r\n\r\n${httpPath[1]}`
+    response.body = httpPath[1];
+    response.headers['Content-Type'] = 'text/plain';
+    response.headers['Content-Length'] = response.body.length;
+    return response;
 
 
 
 }
-async function UserAgentEchoRequestHandler(rawHttpReqString: string,params:any,headers:any) {
+async function UserAgentEchoRequestHandler(rawHttpReqString: string,params:any,headers:any,requestBodyRaw:string,response:any) {
+    response.body = headers['User-Agent'];
+    return response;
     return `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${headers['User-Agent'].length}\r\n\r\n${headers['User-Agent']}`;
 }
 
@@ -199,6 +242,7 @@ async function onConnection(socket: net.Socket) {
         const resp= await httpHandler.handleRequest(data);
 
         await socketWrite(tcpConnWrapper, Buffer.from(resp));
+
 
     }
 
